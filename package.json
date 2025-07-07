@@ -1,5 +1,5 @@
 {
-  "name": "@tweinfeld/open_ai_client",
+  "name": "kefir-open-ai-client",
   "version": "1.0.0",
   "main": "./src/open_ai_client.js",
   "scripts": {
@@ -7,7 +7,7 @@
   },
   "type": "module",
   "keywords": [],
-  "author": "",
+  "author": "Tal Weinfeld",
   "license": "ISC",
   "description": "",
   "files": [
@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/username/repo-name.git"
+    "url": "https://github.com/tweinfeld/open_ai_client.git"
   },
   "dependencies": {
     "concat-stream": "^2.0.0",
