@@ -1,12 +1,12 @@
-import pipe from "lodash/fp/pipe.js";
+import got from "got";
+import kefir from "kefir";
+import split from "split";
 import get from "lodash/fp/get.js";
+import pipe from "lodash/fp/pipe.js";
 import noop from "lodash/fp/noop.js";
 import identity from "lodash/fp/identity.js";
 import toString from "lodash/fp/toString.js";
 import concatStream from "concat-stream";
-import kefir from "kefir";
-import got from "got";
-import split from "split";
 import { pipeline } from "node:stream";
 
 const DEFAULT_VERB = "POST";
@@ -30,7 +30,7 @@ export const OaiClientFactory = (apiKey) => {
   };
 };
 
-export const OaiStreamingClientFactory = (apiKey) => {
+export const OaiStreamingClientFactory = (apiKey, dataParser = JSON.parse) => {
   return function (path, body, verb = DEFAULT_VERB) {
     const responseStream = got.stream({
       method: verb,
@@ -78,11 +78,11 @@ export const OaiStreamingClientFactory = (apiKey) => {
 
               return chunkMap.has("data")
                 ? [
-                    Object.fromEntries(
-                      [...chunkMap.entries()].map(([key, value]) => [
+                    Object.fromEntries(chunkMap.entries()).map(
+                      ([key, value]) => [
                         key,
-                        (key === "data" ? JSON.parse : identity)(value),
-                      ]),
+                        (key === "data" ? dataParser : identity)(value),
+                      ],
                     ),
                   ]
                 : [];
