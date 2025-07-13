@@ -32,70 +32,78 @@ export const OaiClientFactory = (apiKey) => {
 
 export const OaiStreamingClientFactory = (apiKey, dataParser = JSON.parse) => {
   return function (path, body, verb = DEFAULT_VERB) {
-    const responseStream = got.stream({
-      method: verb,
-      url: [API_URL_BASE, path].join("/"),
-      headers: {
-        Authorization: ["Bearer", apiKey].join(" "),
-      },
-      json: body,
-    });
-
     return kefir
-      .fromEvents(responseStream, "response")
-      .merge(
-        kefir
-          .fromEvents(responseStream, "error")
-          .map(get("response.body"))
-          .flatMap(kefir.constantError),
+      .fromCallback((cb) =>
+        cb(
+          got.stream({
+            method: verb,
+            url: [API_URL_BASE, path].join("/"),
+            headers: {
+              Authorization: ["Bearer", apiKey].join(" "),
+            },
+            json: body,
+          }),
+        )
       )
-      .take(1)
-      .flatMap((response) => {
-        const contentType = get("headers.content-type", response);
-        if (/^text\/event-stream/.test(contentType)) {
-          const lineStream = pipeline(
-            responseStream,
-            split(/\r?\n/, null, { trailing: true }),
-            noop,
-          );
+      .flatMap((responseStream) => {
+        return kefir
+          .fromEvents(responseStream, "response")
+          .merge(
+            kefir
+              .fromEvents(responseStream, "error")
+              .map(get("response.body"))
+              .flatMap(kefir.constantError),
+          )
+          .take(1)
+          .flatMap((response) => {
+            const contentType = get("headers.content-type", response);
+            if (/^text\/event-stream/.test(contentType)) {
+              const lineStream = pipeline(
+                responseStream,
+                split(/\r?\n/, null, { trailing: true }),
+                noop,
+              );
 
-          return kefir
-            .merge([
-              kefir.fromEvents(lineStream, "data"),
-              kefir
-                .fromEvents(lineStream, "error")
-                .flatMap(kefir.constantError),
-            ])
-            .takeUntilBy(kefir.fromEvents(responseStream, "end").take(1))
-            .bufferWhile((line) => line.length > 0)
-            .flatten((buffer) => {
-              const chunkMap = buffer.reduce((map, line) => {
-                const { command, value } =
-                  line.match(/^(?<command>[^:]+):\s(?<value>.+)/)?.groups ?? {};
-                if (command) map.set(command, (map.get(value) ?? "") + value);
-                return map;
-              }, new Map());
+              return kefir
+                .merge([
+                  kefir.fromEvents(lineStream, "data"),
+                  kefir
+                    .fromEvents(lineStream, "error")
+                    .flatMap(kefir.constantError),
+                ])
+                .takeUntilBy(kefir.fromEvents(responseStream, "end").take(1))
+                .bufferWhile((line) => line.length > 0)
+                .flatten((buffer) => {
+                  const chunkMap = buffer.reduce((map, line) => {
+                    const { command, value } =
+                      line.match(/^(?<command>[^:]+):\s(?<value>.+)/)?.groups ??
+                      {};
+                    if (command)
+                      map.set(command, (map.get(value) ?? "") + value);
+                    return map;
+                  }, new Map());
 
-              return chunkMap.has("data")
-                ? [
-                    Object.fromEntries(chunkMap.entries()).map(
-                      ([key, value]) => [
-                        key,
-                        (key === "data" ? dataParser : identity)(value),
-                      ],
-                    ),
-                  ]
-                : [];
-            });
-        } else {
-          return kefir.fromNodeCallback((cb) =>
-            pipeline(
-              responseStream,
-              concatStream(pipe(toString, JSON.parse, cb.bind(null, null))),
-              cb,
-            ),
-          );
-        }
+                  return chunkMap.has("data")
+                    ? [
+                        Object.fromEntries(chunkMap.entries()).map(
+                          ([key, value]) => [
+                            key,
+                            (key === "data" ? dataParser : identity)(value),
+                          ],
+                        ),
+                      ]
+                    : [];
+                });
+            } else {
+              return kefir.fromNodeCallback((cb) =>
+                pipeline(
+                  responseStream,
+                  concatStream(pipe(toString, JSON.parse, cb.bind(null, null))),
+                  cb,
+                ),
+              );
+            }
+          });
       });
   };
 };
