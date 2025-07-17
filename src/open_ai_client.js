@@ -43,7 +43,7 @@ export const OaiStreamingClientFactory = (apiKey, dataParser = JSON.parse) => {
             },
             json: body,
           }),
-        )
+        ),
       )
       .flatMap((responseStream) => {
         return kefir
@@ -55,6 +55,7 @@ export const OaiStreamingClientFactory = (apiKey, dataParser = JSON.parse) => {
               .flatMap(kefir.constantError),
           )
           .take(1)
+          .takeErrors(1)
           .flatMap((response) => {
             const contentType = get("headers.content-type", response);
             if (/^text\/event-stream/.test(contentType)) {
